@@ -13,7 +13,7 @@ Install the SDK along with its peer dependencies:
 
 ```bash
 npm install @eco-foundation/routes-sdk @eco-foundation/routes-ts
-
+```
 :::callout
 💡 Keep dependencies updated
 Run the following command to ensure you’re using the latest versions:
@@ -27,11 +27,11 @@ npm install @eco-foundation/routes-sdk@latest @eco-foundation/routes-ts@latest
 An intent represents the desired transfer outcome on a destination chain.
 
 🔹 Import RoutesService
-
+```
 import { RoutesService } from '@eco-foundation/routes-sdk';
-
+```
 🔹 Define Transfer Parameters
-
+```
 const address = '0xYourEthereumAddress';
 const originChainID = 10;  // Optimism
 const destinationChainID = 8453;  // Base
@@ -39,9 +39,9 @@ const spendingToken = RoutesService.getStableAddress(originChainID, 'USDC');
 const receivingToken = RoutesService.getStableAddress(destinationChainID, 'USDC');
 const spendingTokenLimit = BigInt(10000000);  // 10 USDC
 const amount = BigInt(1000000);  // 1 USDC
-
+```
 🔹 Initialize RoutesService and Create Intent
-
+```
 const routesService = new RoutesService();
 
 const intent = routesService.createSimpleIntent({
@@ -54,7 +54,7 @@ const intent = routesService.createSimpleIntent({
   amount,
   recipient: address,  // Optional, defaults to the creator
 });
-
+```
 2️⃣ Request and Apply a Quote
 
 To optimize fulfillment, request quotes from solvers.
@@ -81,6 +81,7 @@ const intentWithQuote = routesService.applyQuoteToIntent({ intent, quote: select
 Once the intent is prepared, publish it to the origin chain using your preferred web3 library.
 
 // Example using ethers.js
+```
 import { ethers } from 'ethers';
 
 const provider = new ethers.JsonRpcProvider("https://your-rpc-url");
@@ -93,7 +94,7 @@ const tx = await signer.sendTransaction({
 
 await tx.wait();
 console.log("Intent published:", tx.hash);
-
+```
 🎯 Next Steps
 
 ✅ Start integrating – Explore advanced configurations in the Eco Routes SDK documentation.
@@ -106,12 +107,3 @@ console.log("Intent published:", tx.hash);
 ✨ Now you’re ready to send stablecoins across chains with a single click! 🚀
 :::
 
----
-
-### **Why This Markdown is Optimized for Mintlify**
-✅ **Uses `callout` for key tips**  
-✅ **Uses `tabs` for multi-language code snippets**  
-✅ **Supports `code` blocks with syntax highlighting**  
-✅ **Well-structured for readability and engagement**  
-
-This will render beautifully in Mintlify’s docs platform. Let me know if you need any refinements! 🚀
