@@ -1,0 +1,107 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "Eco Docs",
+  "colors": {
+    "primary": "#3b82f6",
+    "light": "#3b82f6",
+    "dark": "#9dc0fa"
+  },
+  "theme": "venus",
+  "background": {
+    "style": "gradient"
+  },
+  "sidebar": {
+    "items": "border"
+  },
+  "modeToggle": {
+    "default": "light"
+  },
+  "logo": {
+  "light": "/~/files/logos/logo.png",
+  "dark": "/~/files/logos/Logo_white.svg",
+  "href": "https://eco.com/"
+  },
+  "favicon": "/~/files/logos/favicon.png",
+  "navigation": [
+    {
+      "group": "Introduction",
+      "pages": [
+        "home",
+        "introduction/eco-architecture",
+        "introduction/conceptual-terms",
+        "introduction/roadmap",
+        "introduction/beta-disclaimer"
+      ]
+    },
+    {
+      "group": "Routes",
+      "pages": [
+
+        {
+          "group": "Routes Architecture",
+          "pages": [
+            "routes/routes-architecture",
+            "routes/routes-architecture/intent-source-contract",
+            "routes/routes-architecture/inbox-contract",
+            {
+              "group": "Native Route (Prover Contract)",
+              "pages": [
+                "routes/routes-architecture/native-route-prover-contract",
+                "routes/routes-architecture/native-route-prover-contract/storage-proofs"
+              ]
+            },
+            {
+              "group": "Hyperlane Route (HyperProver Contract)",
+              "pages": [
+              "routes/routes-architecture/hyperlane-route-prover-contract"
+              ]
+            }
+          ]
+        },
+        {
+          "group": "Developer Infrastructure / Tooling",
+          "pages": [
+            "routes/developer-infrastructure-tooling/prover-service",
+            "routes/developer-infrastructure-tooling/filler-service",
+            "routes/developer-infrastructure-tooling/permissionless-deployment",
+            "routes/developer-infrastructure-tooling/sdk-coming-soon"
+          ]
+        },
+        {
+          "group": "Future Directions",
+          "pages": [
+            "routes/future-directions/batch-proofs-for-native-route",
+            "routes/future-directions/bonded-exclusivity",
+            "routes/future-directions/delegate-calls-helper-contracts",
+            "routes/future-directions/erc-7683-compliance",
+            "routes/future-directions/gasless-initiations",
+            "routes/future-directions/optimistic-claims",
+            "routes/future-directions/off-chain-origination-data",
+            "routes/future-directions/payable-functions",
+            "routes/future-directions/solver-reputation-system",
+            "routes/future-directions/tee-matching-mechanism",
+            "routes/future-directions/zk-assisted-storage-proofs"
+          ]
+        },
+        "external-link-0"
+      ]
+    },
+    {
+      "group": "Future Systems",
+      "pages": [
+        "future-systems/accounts",
+        "future-systems/eco-network"
+      ]
+    },
+    {
+      "group": "References",
+      "pages": [
+        "references/contract-addresses",
+        "external-link-1",
+        "external-link-2",
+        "external-link-3",
+        "external-link-4"
+      ]
+    }
+  ]
+}

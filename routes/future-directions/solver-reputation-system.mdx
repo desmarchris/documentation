@@ -1,0 +1,15 @@
+---
+title: "Solver Reputation System"
+---
+
+The protocol will implement enhancements to the Inbox Contract to incorporate a solver reputation system. This future feature aims to incentivize solvers to provide credible and timely quotes to users. By tracking onchain promises and their outcomes, the protocol will enable the evaluation of the solver's fulfillment reliability, ensuring this reputation becomes a critical factor in user decision-making when selecting quotes — in effect, giving the Open Quoting System some teeth.
+
+The mechanism would look something like this:
+
+1. **Signature Agreement:** A user and solver agree on terms (e.g., price, fulfillment timeline) via cryptographic signatures. Either party submits this agreement onchain, directly, or through a gasless relay with the signature of the agreement.
+
+2. **Onchain Emit:** Once submitted, the contract validates the agreement and emits an onchain event reflecting the commitment.
+
+3. **Offchain Indexing:** Offchain services index these emitted events to track solver commitments. Indexers calculate each solver's fulfillment rate by comparing completed transactions against emitted promises.
+
+4. **Fulfillment Scoring:** The fulfillment score measures the percentage of agreements a solver successfully fulfills within the agreed timeline. This score is combined with price to rank quotes for users, ensuring both cost and reliability inform decision-making

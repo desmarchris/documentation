@@ -1,0 +1,88 @@
+---
+title: "Storage Proofs"
+description: "An overview of technical concepts discussed throughout the Eco Docs"
+---
+
+# Storage Proofs
+
+### L1 Block Oracle
+
+Rollups typically expose information about the settlement layer in the execution environment of the rollup. For example, Optimism, which runs on the OP Stack, exposes L1 block information of Ethereum in the `L1Block` contract on Optimism.
+
+[Navigating to the contract on Optimistic Etherscan](https://optimistic.etherscan.io/address/0x4200000000000000000000000000000000000015#readProxyContract) allows us to explore what kind of information is available from the `L1Block` oracle. Most importantly, the `hash` function gives us the latest L1 block hash and the `number` function gives us the corresponding block number.&#x20;
+
+<Frame caption="Screenshot of the Contract's Read Functions">
+  <img src="/images/routes/blockoracle.png" />
+</Frame>
+
+The Eco Protocol employs the use of these kinds of L1 oracles heavily in order to fulfill cross-rollup transactions.&#x20;
+
+### The Block Hash
+
+In EVM systems, the blockhash is a unique identifier for each block in the Ethereum blockchain. It ensures the integrity and immutability of the blockchain by linking each block to the previous one and attesting to the entire state of the virtual machine, including account balances and contract storage. The blockhash is derived from a series of hashing computations that attest to relevant state information in Ethereum.
+
+<Info>
+  [This Stackoverflow post](https://ethereum.stackexchange.com/questions/268/ethereum-block-architecture) contains a great diagram illustrating how the blockhash is constructed and what information it contains. The diagram is based on Ethereum's previous Proof of Work consensus mechanism, but the sections we will discuss remain relevant today.
+</Info>
+
+&#x20;In the first layer of the hashing operations, the blockhash still contains the **State Root**, which holds information about all accounts on Ethereum. The diagram below demonstrates how the State Root is laid out. At the position for each account, there is a data structure that contains that specific accounts nonce, balance, storageRoot, and codeHash. The storageRoot is another tree like data structure that contains information about all the variables in the contracts long term storage.&#x20;
+
+<Frame caption="Diagram of the World State Trie">
+  <img src="/images/routes/wst.avif" />
+</Frame>
+
+### Merkle Patricia Trie
+
+The **State Root** is also referred to as the "World State Trie" because it is formatted as a Merkle-Patricia Trie. The Merkle Patricia Trie operates similarly to a Merkle Tree in that both use recursive hashing to maintain data integrity and provide cryptographic proofs of inclusion. However, the Merkle Patricia Trie is specifically designed to efficiently handle key-value pairs and optimize updates and lookups.
+
+Here’s how recursive hashing works in the Merkle Patricia Trie to determine the state root:
+
+1. **Node Hashing**: The trie is composed of three types of nodes—leaf, extension, and branch nodes. Leaf nodes contain key-value pairs (with encoded keys) and are hashed directly. Extension and branch nodes point to other nodes, and their hashes are computed by concatenating and hashing their child nodes.
+
+2. **Recursive Hashing**: Starting from the leaf nodes at the bottom of the trie, the hashes are calculated and propagated upwards. Each level of the trie combines and hashes the child nodes' hashes, producing the hash for the parent node.
+
+3. **Root Hash**: This process continues until the top of the trie is reached. The final node, known as the root node, produces a single hash value—this is the *state root*. The state root acts as a cryptographic commitment to the entire dataset stored in the trie.
+
+<Frame caption="Diagram of the MPT Construction">
+  <img src="/images/routes/mpt.webp" />
+</Frame>
+
+<Accordion title="Further Reading on the Merkle Patricia Trie">
+  <summary>Further Reading on the Merkle Patricia Trie </summary>
+
+  If you're interested in better understanding how these Trie's work, here is some recommended reading:&#x20;
+
+  * [Merkle Patricia Trie (Ethereum.org) ](https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/)
+
+  * [How does a Merkle-Patricia-trie tree work?](https://ethereum.stackexchange.com/questions/6415/eli5-how-does-a-merkle-patricia-trie-tree-work)&#x20;
+</Accordion>
+
+The key takeaway is that the state of any contract can be proven using an inclusion proof within the Merkle Patricia Trie. An inclusion proof is a cryptographic method that verifies whether a specific piece of data (such as a contract’s state) is included in the overall structure by tracing a path of hashes from the data to the root of the trie. For normal Merkle Trees, these are called [Merkle Inclusion Proofs](https://ethereum.org/en/developers/tutorials/merkle-proofs-for-offline-data-integrity/).
+
+In Ethereum, this type of proof performed on the Merkle Patricia Trie is referred to as a **Storage Proof.** It allows you to confirm the state of a contract at a given block, ensuring trustless validation without requiring the entire state data.
+
+### Contract Storage Layout
+
+As mentioned before, you can see that each contract has a data structure in the World State Trie that attests to the **storageRoot** of that contract. How storage is laid out for a specific smart contract is dependent on what language that contract is written in. For Solidity contracts, [this guide is an excellent reference](https://docs.alchemy.com/docs/smart-contract-storage-layout) that explains exactly how storage is laid out in the Merkle Patricia Trie. With this context in mind, we can now explain how **storage proofs** function in Ethereum.
+
+### Storage Proofs
+
+Storage proofs allow for the state of *any variable* in a smart contract to be cryptographically verified. They work by providing a proof of inclusion for that variable’s data within the Merkle Patricia Trie, from the Account storage slot all the way up to the state root.&#x20;
+
+For an oversimplified example, let's say I want to prove I own 10 USDC. The logic of the proof looks something like this:&#x20;
+
+1. Show that the balance of my account in the **Account Storage Trie** is 10.
+
+2. Show that the root of the **Account Storage Trie** is present in the **World State Trie**.
+
+3. Show that the root of the **World State Trie** is present in the **Block Hash.**
+
+<Info>
+  For more information about how storage proofs work, check out this [Herodotus article. ](https://docs.herodotus.dev/herodotus-docs/developers/storage-proofs)
+</Info>
+
+### Conclusion
+
+The Eco Protocol aims to provide a mechanism for simple crosschain stablecoin transfers by pioneering a message bridge mechanism that allows for cross-chain data passing without introducing new trust assumptions. This is possible because sequencers already post L1 roots on a regular basis (for example, Ethereum's root on Optimism), allowing the utilization of **storage proofs** to verify the states of other rollups that utilize an identical parent layer.
+
+Bringing it all together, it is possible to trustlessly pass a message between Base and Optimism because of the `L1Block` oracle. The `L1Block` oracle contains the Ethereum State Root, which contains the most recently posted block hashes of Base and Optimism.  By using a storage proof, we can extract Base and Optimism's state root, allowing us to use that storage root to prove the state of any contract on both chains!

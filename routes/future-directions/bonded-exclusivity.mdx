@@ -1,0 +1,13 @@
+---
+title: "Bonded Exclusivity"
+---
+
+One current disadvantage of Routes is that it lacks a system for matching users and solvers off-chain (i.e., an alt-mempool or RFQ system) before the submission of intents onchain
+
+Depending on the choice of prover, this can result in intent funds being locked up for a few hours and, in the worst case, longer than a week. While this is acceptable for the Alpha release of the protocol, which is targeted at application developers who already have reputational incentives to fill intents for their users, alternative mechanisms are needed to make it more friendly to decentralized solvers and users.
+
+This also creates a race condition on the `Inbox` contract, where a filler may submit an intent fill after another solver and have a reverted transaction included in a block.
+
+### **Bonded Exclusivity**
+
+Bonded Exclusivity provides solvers with the ability to submit intents on behalf of users using Permit2 with valid signatures. The solver would be required to post a bond (or have a sufficient bond in the system) to perform an exclusive transaction. When the filler does not fulfill the intent, a collateral bond would be awarded to the user when reclaiming the original token reward sufficient to reimburse them and dissuade the filler from not fulfilling the intent.

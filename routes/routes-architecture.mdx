@@ -1,0 +1,92 @@
+---
+title: "Architecture Overview"
+description: "An overview of the Eco Routes architecture."
+---
+
+## Routes
+
+Routes addresses the challenge of fragmented cross-chain liquidity by providing users the ability to request the fulfillment of actions on other chains, with a focus on stablecoin sends / swaps. For the Beta launch, Eco has released the [Routes](https://github.com/the-eco-foundation/eco-routes/tree/092efe3aaa6fa36c216c57418bcbd4f2540ee1b3) on Arbitrum, Base, Mantle, and Optimism. This version supports cross-chain transfers of stablecoins and like-kind assets between these chains.
+
+* [Native Route](https://eco.com/docs/routes/routes-architecture/native-route-prover-contract): enables onchain apps with cross-chain transfers without any added trust assumptions. It implements a storage proof mechanism to verify cross-chain transfers using data already posted to Ethereum’s root by Ethereum Layer 2s. 
+
+* [Hyperlane Route:](https://eco.com/docs/routes/routes-architecture/hyperlane-route-prover-contract) enables onchain apps with fast cross-chain transfers secured by Hyperlane’s interoperability protocol. The Hyperlane Route optimizes stablecoin transfers for speed and low cost, using a messaging-based proof mechanism to validate cross-chain transfers.&#x20;
+
+### **Participants**
+
+Routes relies on an intent based architecture, where users specify the actions they want to happen on another chain. In this system, there are two actors, **users** and **solvers**.
+
+* **Users** are EOAs or smart contract wallets with a need to perform a payment or action on another chain. Typically, these users are using an application that has integrated the transfer system.
+
+* **Solvers** are market participants who help users execute intents for a fee. For the Alpha release of the system, the architecture is optimized for applications that fill intents for their own users.
+
+<Info>
+  The following section discusses the technical details of the Eco Protocol. If you're unfamiliar with concepts like Storage Proofs, please see the [Storage Proofs](/routes/routes-architecture/native-route-prover-contract/storage-proofs) section.
+</Info>
+
+## **High-Level System Architecture**
+
+The **Origin chain** is the chain where the User requests the intent, and the **Destination chain** is the chain where the solver executes a transfer request. The system relies on 3 contracts across these chains to manage cross-chain transfers:
+
+* `IntentSource` Contract — lives on the Origin chain and is responsible for the management of intent origination, custody of funds, and solver fulfillment.
+
+* `Inbox` Contract — lives on the Destination chain and is responsible for the management of intent fulfillment and prevention of double fills.
+
+* `Prover` Contract — lives on the Origin chain and is responsible for the management of intent fulfillment proof. Multiple types of prover contracts are currently supported in the Eco Protocol system. Different types of provers enable developers and app users to opt into speed or trust tradeoffs which best fit their needs.
+
+### **Transfer Flow**
+
+Fulfilling a route request requires 4 basic steps. This example highlights an L2 to L2 transfer fulfillment:
+
+1. **User Originates Request:**
+
+   1. The user locks up funds in the `IntentSource` contract on the Origin chain. The intent specifies a destination chain, a set of functions that must successfully be called with their corresponding calldata, and which prover will be used for validating intent fulfillment. For most requests, the contracts will be stablecoin contracts and users will request transfers to specific addresses.
+
+   2. If the intent request is successfully initiated in the contract, it is assigned a hash identifier, and reward tokens are deposited for custody by the contract.
+
+   3. These tokens are a reward for anyone that fulfills the intent in time. If the intent is not fulfilled in time, the tokens can be reclaimed by the user.
+
+2. **Solver Completes Request:**
+
+   1. A solver sees the intent on the `IntentSource` contract on the Origin chain. They call a function on the `Inbox` contract on the Destination Chain with the original data the user sent with the request. The contract calculates the hash based on the set of calls (which should match the hash on the Origin chain).
+
+   2. The `Inbox` contract then executes the specific function calls. At the end of the calls, the `Inbox` contract makes sure that all the specified calls were successful, and if so, marks the intent as fulfilled. The intent is marked using a mapping that stores the address credited with the fulfillment, with the hash as the key.
+
+   3. Because the hash is unique, the contract prevents anyone else from submitting a fill for an intent with the same hash. This prevents two solvers accidentally filling the same intent!
+
+3. **Solver Proves Fulfillment:**
+
+   1. The Beta System supports two Routes: the **Native Route** and the **Hyperlane Route.** The Native Route uses the `Prover` contract to prove intent fulfillment with storage proofs. The Hyperlane Route uses the `HyperProver` contract to prove intent fulfillment.
+
+   2. If the **Native Path** was selected during intent origination:
+
+      1. The solver then submits a proof on the Origin chain to the `Prover` contract to claim the funds. The proof uses the L1Block oracle on the L2 to construct a series of Storage Proofs. These proofs derive the state root of the Destination chain and make it accessible in the execution context of the Origin chain.
+
+      2. With the origin chain's state root, the intent's fulfillment can be proven via another storage proof. The proof proves that the intent was fulfilled on the Destination chain by proving the relevant storage slot in the `Inbox` contract using the Destination state root.
+
+      3. The Native Path requires the state root to be settled per the settlement criteria of the L2.
+
+   3. If the **Hyperlane Route** was selected during intent origination:
+
+      1. During the fulfillment on the `IntentSource`, the solver chooses whether they want an instant proof communication or to be added to a batch.
+
+      2. If the instant fulfillment was selected, Hyperlane immediately sends a message that marks the intent as proven on the Origin chain in the `HyperProver` contract.
+
+      3. If the batch fulfillment was selected, the intent is relayed in a batch by Hyperlane, which batches multiple intent fulfillments into a single message and marks them all as proven in the `Hyperprover` contract.
+
+4. **Solver Claims Reward**
+
+   1. After the intent is marked as fulfilled in the relevant Prover contract, the solver can claim funds from the `IntentSource`. If the intent was not fulfilled in time, the user can reclaim their funds after the end of the lockup period.
+
+### **Native & Hyperlane Routes Flows**
+
+<Frame caption="Native Route Transfer Flow">
+  ![](/NativeRouteDiagram.jpg)
+</Frame>
+
+<Frame caption="Hyperlane Route Transfer Flow">
+  ![](/HyperlaneRouteDiagram.jpg)
+</Frame>
+
+### **Interoperability**
+
+The system is designed to be maximally flexible. All three of the main contracts in the system are designed to be able to be swapped out by users originating intents. This means that adding an alternative proof mechanism or alternative logic in the intent source contract is as simple as deploying different contracts and specifying them in contract calls.

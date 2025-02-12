@@ -1,0 +1,7 @@
+---
+title: "Offchain Origination Data"
+---
+
+In order to save expense associated with calldata and storage, intent originations in the `IntentSource` contract could move the list of arbitrary function calls offchain. In this version of the system, users would submit only the intent hash and required collateral, while fillers will reference offchain sources to access the detailed specifics of the request.
+
+In order to fill requests, Fillers would ingest the offchain data, and fill on the `Inbox` contract like usual.  The contract would calculate the hash, and relay the intent fulfillment like normal, which would unlock the funds on the origin chain.

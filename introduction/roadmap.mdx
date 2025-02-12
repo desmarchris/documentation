@@ -1,0 +1,66 @@
+---
+title: "Roadmap"
+description: "This section details the phasing for the roadmap of the Eco Protocol."
+---
+
+## Eco Routes (Beta)
+
+Eco Routes (Beta) encompasses the following (Learn more about [Routes](/routes/routes-architecture)):
+
+* **Chain Coverage:** Transfers between **Arbitrum**, **Base**, **Mantle**, and Optimism will be the supported chains for select stablecoins.
+
+* **Settlement System Flexibility:** The system will allow users and applications to choose between the trust-minimized Native Route\* and the cost and speed-optimized Hyperlane Route. The Hyperlane Route also includes a batch proof system for reducing the overhead costs of relaying proofs.
+
+* **Net Claim Function:** Solvers need to withdraw rewards for each intent one at a time, which is inefficient. A net claim will iterate over an array of supplied intent hashes and transfer the rewards using the minimum number of token transfers.
+
+* **Permissionless Liquidity:** Routes will allow any L2 or L3 to deploy a Route to their rollup permissionlessly. Routes will provide an efficient way for new and established chains to seamlessly onboard users and grow native liquidity on their chain.
+
+* **Eco Portal:** Routes will also include a showcase **Eco Portal** that will allow crypto-natives to use the system for cross-chain stablecoin sends.
+
+* **Bend Integration:** [Bend](https://bend.eco/) will also use Routes to complete any payment requests between supported chains.
+
+* **Open-Sourced Solver:** An open-sourced implementation of a solver will allow anyone to become a solver in the system.
+
+Shortly after Beta launch, the **Routes SDK** will be provided, the system will be compatible with onchain portion of the **7683 Standard,** and an **Open Quoting System** to match solvers and users will be launched.
+
+<Note>
+  The Native Route is only supported for L2 deployments and OP Stack chains. Other systems will use the Hyperlane Route by default.
+</Note>
+
+## Mainnet Launch
+
+The Mainnet launch of the Eco Protocol will unify **Routes** and **Accounts** into one cohesive network. Accounts will allow users to employ a system of cross chain wallets to compose actions cross-chain seamlessly. Mainnet launch involves the following:
+
+* **Accounts** provides developers with a seamless way to manage cross-chain accounts with chain-abstracted balances, making it easy to support cross-chain interactions. These wallets will allow developers and users to spend their Ethereum balances in a unified balance by composing with Routes.
+
+* **Routes**
+
+  * [Gasless Initiations](/routes/future-directions/gasless-initiations)**:** Using Permit and Permit2, the system will allow users to provide signatures to originate intents, allowing solvers to originate intents on behalf of users after finding a match in the quoting system. This will also allow for compatibility with the gasless portion of the 7683 standard.
+
+  * **L3 Proof Support**: The system will be extended to support L3 proofs, allowing almost all OP Stack rollups to use the proof system. The system may also extend to support 4788 for chains that do not expose a block oracle like OP Stack chains.
+
+  * [Delegate Calls / Helper Contracts](/routes/future-directions/delegate-calls-helper-contracts)**:** In the Beta release, the system depends on solvers prefilling the Inbox contract for stablecoin transfers via multicalls. This is a more secure way to deal with arbitrary call execution, but DelegateCall and helper contracts will be added to the Mainnet launch to support more gas-efficient execution.
+
+  * [Solver Reputation System](/routes/future-directions/solver-reputation-system): The system will be extended to support a solver reputation system. This will provide a strong incentive for solvers that offer quotes to users to fulfill them in time credibly.
+
+  * [Payable Functions](/routes/future-directions/payable-functions)**:** Currently, the system does not support Payable functions but will be extended to support them.
+
+  * **Additional Routes:** New Routes will be added, providing other tradeoffs to solvers and intent creators.
+
+## Future Directions
+
+After Mainnet launch, the **Eco Network** and other features will be phased into the system. Here are some directions for exploration:
+
+* **Routes System**
+
+  * Option for users and solvers to choose [Bonded Exclusivity](/routes/future-directions/bonded-exclusivity) for intent origination.
+
+  * Exploration of a [TEE Matching Mechanism](/routes/future-directions/tee-matching-mechanism) between users and solvers to allow for atomic intent fulfillment without the need for proof communications.
+
+  * Option to perform batch storage proofs using [ZK-Assisted Storage Proofs](/routes/future-directions/zk-assisted-storage-proofs) and [Batch Proofs for Native Route](/routes/future-directions/batch-proofs-for-native-route)
+
+  * Option for solvers to choose [Optimistic Claims](/routes/future-directions/optimistic-claims) with sufficient collateral on the Rollup
+
+  * [Off-chain Origination Data](/routes/future-directions/off-chain-origination-data) to reduce the cost of intent origination to a minimum.
+
+* **The Eco Network** will be natively integrated with the Routes and Accounts systems, aggregating and optimizing liquidity and transaction execution.

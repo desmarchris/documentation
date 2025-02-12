@@ -1,0 +1,33 @@
+---
+title: "Conceptual Terms"
+---
+
+### Intents
+
+Intents are specific goals that a user wants to accomplish onchain. Unlike transactions that specify specific instructions, intents focus on the result, leaving the execution of the task to solvers. [Learn More](https://www.paradigm.xyz/2023/06/intents).
+
+#### An Analogy to Understand Intents
+
+> Imagine you want to order a burger and instead of receiving a ready-made burger, you’re given all the ingredients and told to assemble it yourself. This is how many blockchain transaction models work today; users and app developers have to navigate the complexities and manage the creation and signing of transactions on their own, leading to a frustrating developer experience and ultimately, a bad user experience.Now, imagine if you ordered a burger and it arrived fully assembled. You don’t concern yourself with who made it or how it was made; you only care that you got exactly what you asked for. This represents an intent-based model. In blockchain systems, a user simply define the outcome they want, and the system takes care of the rest, handling the construction and execution of the transaction.
+
+### Solvers
+
+Solvers (also known elsewhere as fillers) are market participants who help users execute intents for a fee. Within the Eco Protocol, solvers scan for users’ intents, signaling that they are interested in using Token A, while the app accepts Token B.
+
+### Account Abstraction
+
+Account Abstraction in blockchain allows people to use smart contracts as their accounts, which enables people to set flexible rules to manage their wallets. This is crucial for improving user onboarding and interaction by allowing features like flexible key management, batching transactions, multi-signature wallets, gas abstraction, and social recovery. [Learn more](https://ethereum.org/en/roadmap/account-abstraction/).
+
+### Rollups:
+
+Rollups are a Layer 2 (L2) scalability solution that bundles and processes transactions off of a Layer 1 like Ethereum to optimize transaction speeds and reduce transaction costs.
+
+An Ethereum L2 rollup posts the proof that it performed the off-chain execution correctly to Ethereum mainnet and must also post the data required to reconstruct the state of the chain to Ethereum or another Data Availability Layer. In doing so, they inherit the security of Ethereum at a fraction of the cost. L3 rollups extend this concept further, creating additional layers to handle more complex operations. [Learn more](https://ethereum.org/en/layer-2/).
+
+### Message Bridges
+
+Message bridges enables communication between different blockchain networks, allowing seamless data and asset transfers. It's essential for developers building apps that need to communicate with other apps on different blockchains. [Learn more](https://ethereum.org/en/developers/docs/bridges/).
+
+### Storage Proofs
+
+Storage proofs are cryptographic tools that allow one blockchain to verify the state or existence of specific data on another blockchain without needing to download the entire state. They enable efficient and trustless verification by providing a proof that a particular piece of data exists (or doesn't exist) at a certain location within a blockchain's state. This is crucial for cross-chain communication and is used in Routes to create trust minimized intent paths. For more information, see [Storage Proofs](/routes/routes-architecture/native-route-prover-contract/storage-proofs).

@@ -1,0 +1,15 @@
+---
+title: "TEE Matching Mechanism"
+---
+
+Lit Protocol, and other protocols like it, allow for trustless execution of programs running in trusted execution environments (TEEs) across a network of nodes. This opens an incredibly interesting opportunity to use these types of networks to match solvers and proposed intents in a decentralized manner. This is something definitely worth exploring.
+
+If architected correctly, this could potentially remove the need for any intent management on chain, other than bidirectional transfer of assets. Using a USDC transfer on Lit as an example, the TEE matching mechanism would work something like this:
+
+1. An intent creator would signal desire to send USDC on Base by posting the intent to a Lit Program.
+
+2. Solvers would provide quotes with signatures to a Lit Program.
+
+3. The user would choose a quote, and co-sign it, and send it to the Lit Program. Lit would then: A) Use the user signature to transfer the reward to a pending claim contract on OP using Permit2. B) Execute the transfer of the USDC from the solver on Base using Permit2. C) If successful, do nothing. After a period of time, the rewards from step A become claimable. D) If not successful, claw back the funds in the pending claim contract to the user.
+
+This would create a trustless method to match and execute intents conditionally across multiple blockchains without the need for multiple origination, fulfillment and proof transactions.

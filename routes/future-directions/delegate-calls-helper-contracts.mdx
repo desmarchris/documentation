@@ -1,0 +1,7 @@
+---
+title: "Delegate Calls / Helper Contracts"
+---
+
+In the Beta version of the protocol, the `Inbox` contract calls the functions natively using `.Call` This means that calls like `transfer(address,uint256)`transfer funds natively from the contract, requiring solvers to pre-fill the contract with a multi-call before calling fulfill. This is actually preferred as a default behavior, because calling arbitrary contracts with `.delegateCall` would create a high risk of fulling draining a solver if the arbitrary call contained malicious code. With `.Call` as the default, the solver must pre-fund the contract, and at most, only risks the funds that were prefilled.
+
+This, however, is not with its drawbacks, specifically with respect to gas efficiency. Therefore, future versions of the protocol will also support `.Call` to give the solvers the ability to efficiently fill orders when the set of calls are on contracts they trust. The `Inbox` contract may also be extended to allow for helper contracts to fill on behalf of solvers.

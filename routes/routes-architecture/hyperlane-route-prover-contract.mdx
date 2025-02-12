@@ -1,0 +1,61 @@
+---
+title: "Contract Overview"
+description: "An overview of the Hyperlane Route (Prover Contract), responsible for managing intent fulfillment proofs for the Hyperlane Route."
+---
+
+<Info>
+  Each origin chain supported by the Eco Protocol has at least one `Prover` contract. This section details the Native Path which uses Storage Proofs to relay intent fulfillments.
+</Info>
+
+## Hyperlane Route Contract Design
+
+The Hyperlane Route uses the `HyperProver` contract for verification. The `HyperProver` contract contains a single core function (`handle`) and is significantly simpler than the Native Path contract. All code snippets in this section reference [this specific commit](https://github.com/the-eco-foundation/eco-routes/tree/092efe3aaa6fa36c216c57418bcbd4f2540ee1b3).
+
+The HyperProver contract uses Hyperlane, a permissionless messaging protocol, to relay proofs of intent fulfillments. For more information about Hyperlane, [please see their website.](https://hyperlane.xyz/)
+
+### Handle Function
+
+The `handle` function takes a message from the Hyperlane Mailbox contract on the Origin chain and verifies the authenticity of the message. It can handle both single intent relays, and batch relays. When a message is validated, it marks the intent as proven.
+
+```solidity
+function handle(uint32, bytes32 _sender, bytes calldata _messageBody) public payable{
+
+    if(MAILBOX != msg.sender) {
+        revert UnauthorizedHandle(msg.sender);
+    }
+
+    address sender = _sender.bytes32ToAddress();
+
+    if (INBOX != sender) {
+        revert UnauthorizedDispatch(sender);
+    }
+    (bytes32[] memory hashes, address[] memory claimants) = abi.decode(_messageBody, (bytes32[], address[]));
+    for (uint256 i = 0; i < hashes.length; i++) {
+        (bytes32 intentHash, address claimant) = (hashes[i], claimants[i]);
+        if (provenIntents[intentHash] != address(0)) {
+            emit IntentAlreadyProven(intentHash);
+        } else {
+            provenIntents[intentHash] = claimant;
+            emit IntentProven(intentHash, claimant);
+        }
+    }
+}
+```
+
+## Design Discussion
+
+The Hyperprover was added as a fast path for the intent system. The addition of the Hyperprover allows near instant intent fulfillment and proof, allowing solvers to recycle their capital much faster and more efficiently.
+
+### Issues with Storage Proofs
+
+While storage proofs come with a host of advantages and are trust-minimized, they create some disadvantages that create poor user experience and unnecessary cost for users who are making low-value cross-chain payments.
+
+1. **Expense:** Storage proofs require extreme amounts of calldata and are computationally expensive. This means that a full end-to-end intent fulfillment (without shared proof overhead) costs an order of magnitude more than a centralized service might provide. While this is appropriate for large value stablecoin transfers, this overhead is prohibitive for normal everyday payments.
+
+2. **Speed:** Storage roots also require sequencers to post their block roots on a regular cadence. For the Bedrock implementation, standard providers post their roots approximately once an hour, and take 4-7 days to finalize. As a result user funds are, at minimum, locked up for a few days, causing solvers to have to wait a long time to get their funds back. This means they need to charge higher fees than a faster method.
+
+In contrast, the Hyperlane route communicates the successful fulfillment of intents almost instantly to a proof contract, reducing the costs and time delays associated with claiming intent rewards. Initially, the message bridge will be secured by Hyperlane's default POA network.
+
+### Relayer Selection
+
+The Hyperprover, as it stands, does not allow for selection of the relayer to relay the message, and therefore defaults to the default relayer. Support for selection of a preferred relayer is already being added to the system, and will be live shortly. This should allow solvers to run their own relayers and dramatically reduce the cost of relaying messages.

@@ -1,0 +1,256 @@
+---
+title: "Inbox Contract"
+description: "An overview of the Inbox contract, responsible for managing intent fulfillment, preventing double fills, and solver whitelisting (for the Alpha)."
+---
+
+<Info>
+  Each destination chain supported by the Eco Protocol has one `Inbox` contract.
+</Info>
+
+## Inbox Contract Design
+
+The `Inbox` contract contains four primary functions:
+
+* `fulfillStorage` — this function is used to fulfill requests that specified the Native Path (which uses storage proofs) during intent origination.
+
+* `fulfillHyperInstant` — this function is used to fulfill requests that specified the Hyperprover Path during intent origination. It immediately dispatches a Hyperlane message to prove the intent fufillment on the Origin chain.
+
+* `fulfillHyperBatched`— this function is used to fulfill requests that specified the Hyperprover Path during intent origination. Instead of immediately dispatching, it allows intents to be queued in a batch message sent through Hyperlane later.
+
+* `sendBatch`— this function is used to send a batch of intents through Hyperlane that opted for the `fulfillHyperBatched`option when filling an intent.
+
+All code snippets in this section reference [this specific commit](https://github.com/the-eco-foundation/eco-routes/tree/092efe3aaa6fa36c216c57418bcbd4f2540ee1b3).
+
+### Intent Fulfillment
+
+Intent fulfillment is managed through the internal function `_fulfill` function on the `Inbox` contract. All 3 of the fulfilling methods enter this internal function, so it's best to explain it first. The function accepts as input the:
+
+* Source Chain
+
+* Array of Contracts to Call
+
+* Array of Calldata for those Functions
+
+* Expiration Time
+
+* Nonce
+
+* Claimant for Reward
+
+* Expected Hash
+
+```solidity
+function _fulfill(
+    uint256 _sourceChainID,
+    address[] calldata _targets,
+    bytes[] calldata _data,
+    uint256 _expiryTime,
+    bytes32 _nonce,
+    address _claimant,
+    bytes32 _expectedHash
+) internal validated(_expiryTime, msg.sender) returns (bytes[] memory) {
+    bytes32 intentHash =
+        encodeHash(_sourceChainID, block.chainid, address(this), _targets, _data, _expiryTime, _nonce);
+
+    // revert if locally calculated hash does not match expected hash
+    if (intentHash != _expectedHash) {
+        revert InvalidHash(_expectedHash);
+    }
+
+    // revert if intent has already been fulfilled
+    if (fulfilled[intentHash] != address(0)) {
+        revert IntentAlreadyFulfilled(intentHash);
+    }
+```
+
+After running a few sanity checks (like making sure the intent has already been fulfilled), the contract takes the inputs, and calls the downstream functions requested by the intent. If any of the calls are unsuccessful, the \_`fulfill` call reverts and the intent remains unfulfilled. If all the calls are successful, the intent is marked as fulfilled and the claimant is designated as the eligible recipient for the rewards.
+
+```solidity
+    // revert if intent has already been fulfilled
+    if (fulfilled[intentHash] != address(0)) {
+        revert IntentAlreadyFulfilled(intentHash);
+    }
+    // Store the results of the calls
+    bytes[] memory results = new bytes[](_data.length);
+    // Call the addresses with the calldata
+
+    for (uint256 i = 0; i < _data.length; i++) {
+        address target = _targets[i];
+        if (target == mailbox) {
+            // no executing calls on the mailbox
+            revert CallToMailbox();
+        }
+        (bool success, bytes memory result) = _targets[i].call(_data[i]);
+        if (!success) {
+            revert IntentCallFailed(_targets[i], _data[i], result);
+        }
+        results[i] = result;
+    }
+
+    // Mark the intent as fulfilled
+    fulfilled[intentHash] = _claimant;
+
+    emit Fulfillment(_expectedHash, _sourceChainID, _claimant);
+
+    return results;
+}
+```
+
+### Intent Fulfillment (fulfillStorage)
+
+This function is used to fulfill requests that specified the Native Path (which uses storage proofs) during intent origination. It wraps `_fulfill` and then emits an event.
+
+```solidity
+function fulfillStorage(
+    uint256 _sourceChainID,
+    address[] calldata _targets,
+    bytes[] calldata _data,
+    uint256 _expiryTime,
+    bytes32 _nonce,
+    address _claimant,
+    bytes32 _expectedHash
+) external returns (bytes[] memory) {
+
+    bytes[] memory result = _fulfill(_sourceChainID, _targets, _data, _expiryTime, _nonce, _claimant, _expectedHash);
+
+    emit ToBeProven(_expectedHash, _sourceChainID, _claimant);
+
+    return result;
+}
+```
+
+### Intent Fulfillment (fulfillHyperInstant)
+
+This function is used to fulfill requests that specified the Hyperprover Path during intent origination. It immediately dispatches a Hyperlane message to prove the intent fulfillment on the Origin chain.
+
+```solidity
+function fulfillHyperInstant(
+    uint256 _sourceChainID,
+    address[] calldata _targets,
+    bytes[] calldata _data,
+    uint256 _expiryTime,
+    bytes32 _nonce,
+    address _claimant,
+    bytes32 _expectedHash,
+    address _prover
+) external payable returns (bytes[] memory) {
+    bytes[] memory results =  _fulfill(_sourceChainID, _targets, _data, _expiryTime, _nonce, _claimant, _expectedHash);
+    emit HyperInstantFulfillment(_expectedHash, _sourceChainID, _claimant);
+    bytes32[] memory hashes = new bytes32[](1);
+    address[] memory claimants = new address[](1);
+    hashes[0] = _expectedHash;
+    claimants[0] = _claimant;
+
+    bytes memory messageBody = abi.encode(hashes, claimants);
+    bytes32 _prover32 = _prover.addressToBytes32();
+    uint256 fee = fetchFee(_sourceChainID, messageBody, _prover32);
+    if (msg.value < fee) {
+        revert InsufficientFee(fee);
+    }
+
+    IMailbox(mailbox).dispatch{value: fee}(
+        uint32(_sourceChainID),
+        _prover32,
+        messageBody)
+        ;
+    return results;
+}
+```
+
+### Intent Fulfillment (fulfillHyperBatched)
+
+This function is used to fulfill requests that specified the Hyperprover Path during intent origination. Instead of immediately dispatching, it allows intents to be queued in a batch message sent through Hyperlane later.
+
+```solidity
+function fulfillHyperBatched(
+    uint256 _sourceChainID,
+    address[] calldata _targets,
+    bytes[] calldata _data,
+    uint256 _expiryTime,
+    bytes32 _nonce,
+    address _claimant,
+    bytes32 _expectedHash,
+    address _prover
+) external returns (bytes[] memory){
+    bytes[] memory results =  _fulfill(_sourceChainID, _targets, _data, _expiryTime, _nonce, _claimant, _expectedHash);
+
+    emit AddToBatch(_expectedHash, _sourceChainID, _claimant, _prover);
+
+    return results;
+}
+```
+
+The `sendBatch` function takes a list of intent IDs, and relays them to a specific source chain via a batched Hyperlane message.
+
+```solidity
+function sendBatch(uint256 _sourceChainID, address _prover, bytes32[] calldata _intentHashes) external payable {
+    uint256 size = _intentHashes.length;
+    if (size > MAX_BATCH_SIZE) {
+        revert BatchTooLarge();
+    }
+    bytes32[] memory hashes = new bytes32[](size);
+    address[] memory claimants = new address[](size);
+    for (uint256 i = 0; i < size; i++) {
+        address claimant = fulfilled[_intentHashes[i]];
+        if (claimant == address(0)) {
+            revert IntentNotFulfilled(_intentHashes[i]);
+        }
+        hashes[i] = _intentHashes[i];
+        claimants[i] = claimant;
+    }
+    bytes memory messageBody = abi.encode(hashes, claimants);
+    bytes32 _prover32 = _prover.addressToBytes32();
+    uint256 fee = fetchFee(_sourceChainID, messageBody, _prover32);
+    if (msg.value < fee) {
+        revert InsufficientFee(fee);
+    }
+
+    IMailbox(mailbox).dispatch{value: fee}(
+        uint32(_sourceChainID),
+        _prover32,
+        messageBody)
+        ;
+}
+```
+
+## Design Discussion
+
+### Fulfill Parameters
+
+The `_fulfill` function requires the solver to specify many parameters as part of intent fulfillment.
+
+* **Source Chain** — This specifies the ID of the origin chain where the the requested intent was submitted to the `IntentSource` contract.
+
+* **Array of Contracts to Call** — This specifies the list of contracts that the solver is calling on the destination chain.
+
+* **Array of Calldata for those Functions** — This specifies the list of corresponding function signatures and calldata that pair with the contracts to call.
+
+* **Expiration Time** — This specifies the expiration blocktime after which the intent will be considered expired. If the intent fulfillment is not proven by this time, the intent originator can claw back their funds. This expiration time must be appropriately set to the proving method chosen by the intent creator.
+
+* **Nonce** — This represents the unique nonce generated in the `IntentSource` contract as part of intent origination.
+
+* **Claimant for Reward** — This specifies the eligible claimant for the rewards on the source chain.
+
+* **Expected Hash** — This specifies the expected hash the solver anticipated, to protect the solver in case there is some issue during construction of the `_fulfill` transaction.
+
+### Hash Reference and Solver Race Conditions
+
+As mentioned in the [Intent Contract Design](/routes/routes-architecture/intent-source-contract#intent-contract-design), the hash is used on all contracts in the system as a reference and to enforce uniqueness. In the `Inbox` contract, the hash is also used to prevent a given hash from being fulfilled more than once.
+
+If a solver tries to solve an intent after another solver has successfully solved it, then the intent will revert with an `IntentAlreadyFulfilled` error. This prevents solver from accidentally solving intents twice.
+
+This does create a race condition if two solvers submit transactions at the same time trying to solve the same intent. Future versions of the protocol will intend to deal with this for chains where conditional execution cannot be achieved through the use of bundlers (see [Future Directions](/routes/routes-architecture/intent-source-contract#future-directions) on the `IntentSource` contract page).
+
+### Contract Call Execution
+
+<Warning>
+  Intent creators will need to be careful when creating intents for contracts that may not produce deterministic outcomes. Some contracts may successfully complete calls without obtaining the desired outcome that intent creators wanted.
+
+  Likewise, solvers will need to be careful not to fill intents that contain function calls. If not careful, they could be quickly drained of funds.
+</Warning>
+
+### Future Directions
+
+Future versions of the Eco Protocol will introduce significant flexibility around the solver fufillment process. Below are some possible future improvements relevant to the `Inbox` contract, which are also discussed in more detail in [Future Directions](/routes/future-directions).
+
+* [Delegate Calls / Helper Contracts](/routes/future-directions/delegate-calls-helper-contracts) — In the Beta release, the system is dependent on solvers prefilling the Inbox contract for stablecoin transfers via multicalls. This is a more secure way to deal with arbitrary call execution, but DelegateCall and helper contracts will be added in the Mainnet launch to support more gas efficient execution.

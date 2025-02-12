@@ -1,0 +1,26 @@
+---
+title: "Batch Proofs for Native Route"
+description: "As mentioned in the  and  sections, solvers need to submit proofs one at a time in order to prove the successful fulfillment of intents. This is inefficient."
+---
+
+Batch Proof Function
+
+Adding the ability to prove multiple intents in a single call would save around \~50% of the proof cost per proof. This is because the `proveIntent` function duplicates the `proveAccount` function call for each separate intent proof, and this call could be shared over multiple intents.
+
+### Storage Layout Optimizations
+
+To drive the cost per intent down beyond the 50% threshold, optimizations to the storage layout of intents on the `Inbox` contract is required. This is a consequence of how hashmaps are laid out in Contract Storage in the EVM. As a reminder, the storage slot for a hashmap is calculated using the key and the base storage slot, as shown below:
+
+```
+storage_slot = keccak256(abi.encodePacked(key, base_slot))
+
+// for example 
+mapping(address => uint256) balances; // base key stored at slot 0
+storage_slot_of_balance = keccak256(abi.encodePacked(address, 0))
+```
+
+As a result of the above, hashmaps in the EVM result in highly sparse Merkle Patricia Tries, as each key-value pair is stored in a unique location on the Trie and are often far apart from each other. This sparsity increases the size of storage proofs because each proof must traverse the tree independently, leaving little room for overlapping calldata. This results in higher costs for each proof as each proof carries its own data overhead. To optimize this, the proven intents could be saved in the `Inbox` contract using an array.
+
+Arrays, unlike mappings, store their elements in contiguous storage slots. This means that once the base slot of the array is located, each element can be accessed by simply incrementing the index. Consequently, the Merkle Patricia Trie is much less sparse when arrays are used, as the elements are closely packed together.
+
+This tighter packing of data allows for more efficient storage proofs since the paths to the array elements in the storage tree are more likely to overlap. By grouping intents into an array, the proof overhead is minimized as multiple intents can be proven with mostly shared calldata. By batching extremely large numbers of proofs together like this, the cost per proof can be driven down to near zero.

@@ -1,0 +1,297 @@
+---
+title: "Contract Overview"
+description: "An overview of the Native Route (Prover Contract), responsible for managing intent fulfillment proofs for the Native Route."
+---
+
+<Warning>
+  Please refer to the [Storage Proofs](/routes/routes-architecture/native-route-prover-contract/storage-proofs) section in this document if you are unfamiliar with storage proofs as this section references them heavily.
+</Warning>
+
+## Native Route Contract Design
+
+<Info>
+  Each origin chain supported by the Eco Protocol has at least one `Prover` contract. This section details the Native Route which uses Storage Proofs to relay intent fulfillments.
+</Info>
+
+The Native route uses the `Prover` contract for verification. The `Prover` contract contains a few primary functions: `proveSettlementLayerState`, `proveWorldStateBedrock` , `proveWorldStateCannon`, `proveIntent` which are explained below. All code snippets in this section reference [this specific commit](https://github.com/the-eco-foundation/eco-routes/tree/092efe3aaa6fa36c216c57418bcbd4f2540ee1b3).
+
+In order to prove an intent was fulfilled on a specific destination chain, the following actions must be performed:
+
+* Prove the Settlement Layer root
+
+* Prove the Destination Chain root (Bedrock or Cannon)
+
+* Prove the fulfillment of the intent on the Inbox contract
+
+### Settlement Layer Proof
+
+In order to prove that the intent was fulfilled on the destination chain, the L1 block world state tree must be proven (which contains the destination chain root for the next proof). The transaction submits a storage proof that proves the world state root using the L1 Block Oracle on the origin chain, and saves it in storage for other proofs.
+
+```solidity
+function proveSettlementLayerState(bytes calldata rlpEncodedBlockData) public {
+    require(keccak256(rlpEncodedBlockData) == l1BlockhashOracle.hash(), "hash does not match block data");
+
+    uint256 settlementChainId = chainConfigurations[block.chainid].settlementChainId;
+    // not necessary because we already confirm that the data is correct by ensuring that it hashes to the block hash
+    // require(l1WorldStateRoot.length <= 32); // ensure lossless casting to bytes32
+
+    BlockProof memory blockProof = BlockProof({
+        blockNumber: _bytesToUint(RLPReader.readBytes(RLPReader.readList(rlpEncodedBlockData)[8])),
+        blockHash: keccak256(rlpEncodedBlockData),
+        stateRoot: bytes32(RLPReader.readBytes(RLPReader.readList(rlpEncodedBlockData)[3]))
+    });
+    BlockProof memory existingBlockProof = provenStates[settlementChainId];
+    if (existingBlockProof.blockNumber < blockProof.blockNumber) {
+        provenStates[settlementChainId] = blockProof;
+        emit L1WorldStateProven(blockProof.blockNumber, blockProof.stateRoot);
+    } else {
+        revert OutdatedBlock(blockProof.blockNumber, existingBlockProof.blockNumber);
+    }
+}
+```
+
+### Destination Chain Proof (Bedrock)
+
+**For chains that use the Bedrock OP Stack —** The next step for proving an intent fulfillment is to prove the world state root of the destination chain using the world state tree of the settlement chain. This is possible because all L2s periodically post their block hashes in a settlement contract on the settlement chain. At a high level, proving a Bedrock state root requires a proof that the supplied state root is part of the contract storage root, and that the contract storage root is part of the settlement state root. If these conditions are met, the state root is saved in storage for a future intent proof.
+
+<Note>
+  Please see the [Posted vs. Finalized ](/routes/routes-architecture/native-route-prover-contract#posted-vs-finalized)section for a discussion on how the security assumptions for Bedrock and Cannon proofs differ.
+</Note>
+
+```solidity
+function proveWorldStateBedrock(
+    uint256 chainId, //the destination chain id of the intent we are proving
+    bytes calldata rlpEncodedBlockData,
+    bytes32 l2WorldStateRoot,
+    bytes32 l2MessagePasserStateRoot,
+    uint256 l2OutputIndex,
+    bytes[] calldata l1StorageProof,
+    bytes calldata rlpEncodedOutputOracleData,
+    bytes[] calldata l1AccountProof,
+    bytes32 l1WorldStateRoot
+) public virtual {
+    // could set a more strict requirement here to make the L1 block number greater than something corresponding to the intent creation
+    // can also use timestamp instead of block when this is proven for better crosschain knowledge
+    // failing the need for all that, change the mapping to map to bool
+    ChainConfiguration memory chainConfiguration = chainConfigurations[chainId];
+    BlockProof memory existingSettlementBlockProof = provenStates[chainConfiguration.settlementChainId];
+    require(
+        existingSettlementBlockProof.stateRoot == l1WorldStateRoot, "settlement chain state root not yet proved"
+    );
+
+    bytes32 outputRoot = generateOutputRoot(
+        L2_OUTPUT_ROOT_VERSION_NUMBER, l2WorldStateRoot, l2MessagePasserStateRoot, keccak256(rlpEncodedBlockData)
+    );
+
+    bytes32 outputRootStorageSlot =
+        bytes32(abi.encode((uint256(keccak256(abi.encode(L2_OUTPUT_SLOT_NUMBER))) + l2OutputIndex * 2)));
+
+    bytes memory outputOracleStateRoot = RLPReader.readBytes(RLPReader.readList(rlpEncodedOutputOracleData)[2]);
+
+    require(outputOracleStateRoot.length <= 32, "contract state root incorrectly encoded"); // ensure lossless casting to bytes32
+    proveStorage(
+        abi.encodePacked(outputRootStorageSlot),
+        bytes.concat(bytes1(uint8(0xa0)), abi.encodePacked(outputRoot)),
+        l1StorageProof,
+        bytes32(outputOracleStateRoot)
+    );
+
+    proveAccount(
+        abi.encodePacked(chainConfiguration.settlementContract),
+        rlpEncodedOutputOracleData,
+        l1AccountProof,
+        l1WorldStateRoot
+    );
+
+    // provenL2States[l2WorldStateRoot] = l2OutputIndex;
+
+    BlockProof memory existingBlockProof = provenStates[chainId];
+    BlockProof memory blockProof = BlockProof({
+        blockNumber: _bytesToUint(RLPReader.readBytes(RLPReader.readList(rlpEncodedBlockData)[8])),
+        blockHash: keccak256(rlpEncodedBlockData),
+        stateRoot: l2WorldStateRoot
+    });
+    if (existingBlockProof.blockNumber < blockProof.blockNumber) {
+        provenStates[chainId] = blockProof;
+        emit L2WorldStateProven(chainId, blockProof.blockNumber, blockProof.stateRoot);
+    } else {
+        if (existingBlockProof.blockNumber > blockProof.blockNumber) {
+            revert OutdatedBlock(blockProof.blockNumber, existingBlockProof.blockNumber);
+        }
+    }
+}
+```
+
+### Destination Chain Proof (Cannon)
+
+**For chains that use the Cannon OP Stack —** The next step for proving an intent fulfillment is to prove the world state root of the destination chain using the world state tree of the settlement chain. This is possible because all L2s periodically post their block hashes in a settlement contract on the settlement chain. At a high level, proving a Cannon state root is significantly more complex than proving a Bedrock state root. As mentioned in the [Storage Proofs](/routes/routes-architecture/native-route-prover-contract/storage-proofs) section, Cannon manages its fraud proofs through a series of Fault Dispute Games on the settlement chain. The Cannon proof therefore performs a series of steps to complete the storage proof:
+
+1. Proves that the Fault Dispute game referenced in the storage proof came from the official Fault Dispute Game factory on the settlement chain.
+
+2. Proves the storage root in the Fault Dispute game and proves that the fault dispute game is resolved.
+
+If both these conditions are met, the state root is saved in storage for a future intent proof.
+
+<Note>
+  Please see the [Posted vs. Finalized ](/routes/routes-architecture/native-route-prover-contract#posted-vs-finalized)section for a discussion on how the security assumptions for Bedrock and Cannon proofs differ.
+</Note>
+
+```solidity
+function proveWorldStateCannon(
+    uint256 chainId, //the destination chain id of the intent we are proving
+    bytes calldata rlpEncodedBlockData,
+    bytes32 l2WorldStateRoot,
+    DisputeGameFactoryProofData calldata disputeGameFactoryProofData,
+    FaultDisputeGameProofData memory faultDisputeGameProofData,
+    bytes32 l1WorldStateRoot
+) public {
+    ChainConfiguration memory chainConfiguration = chainConfigurations[chainId];
+    BlockProof memory existingSettlementBlockProof = provenStates[chainConfiguration.settlementChainId];
+    require(
+        existingSettlementBlockProof.stateRoot == l1WorldStateRoot, "settlement chain state root not yet proved"
+    );
+    // prove that the FaultDisputeGame was created by the Dispute Game Factory
+    // require(provenL1States[l1WorldStateRoot] > 0, "l1 state root not yet proved");
+
+    bytes32 rootClaim;
+    address faultDisputeGameProxyAddress;
+
+    (faultDisputeGameProxyAddress, rootClaim) = _faultDisputeGameFromFactory(
+        chainConfiguration.settlementContract, l2WorldStateRoot, disputeGameFactoryProofData, l1WorldStateRoot
+    );
+
+    faultDisputeGameIsResolved(rootClaim, faultDisputeGameProxyAddress, faultDisputeGameProofData, l1WorldStateRoot);
+
+    BlockProof memory existingBlockProof = provenStates[chainId];
+    BlockProof memory blockProof = BlockProof({
+        blockNumber: _bytesToUint(RLPReader.readBytes(RLPReader.readList(rlpEncodedBlockData)[8])),
+        blockHash: keccak256(rlpEncodedBlockData),
+        stateRoot: l2WorldStateRoot
+    });
+    if (existingBlockProof.blockNumber < blockProof.blockNumber) {
+        provenStates[chainId] = blockProof;
+        emit L2WorldStateProven(chainId, blockProof.blockNumber, blockProof.stateRoot);
+    } else {
+        if (existingBlockProof.blockNumber > blockProof.blockNumber) {
+            revert OutdatedBlock(blockProof.blockNumber, existingBlockProof.blockNumber);
+        }
+    }
+}
+```
+
+### Intent Proof
+
+The final step for proving an intent fulfillment is to prove the intent hash has been fulfilled on the `Inbox` contract using the world state tree of the destination chain. At a high level, proving an intent requires a proof that the hash for a given intent is part of the contract storage root (otherwise it is not solved), and that the contract storage root is part of the destination state root.
+
+```solidity
+function proveIntent(
+    uint256 chainId, //the destination chain id of the intent we are proving
+    address claimant,
+    address inboxContract,
+    bytes32 intermediateHash,
+    bytes[] calldata l2StorageProof,
+    bytes calldata rlpEncodedInboxData,
+    bytes[] calldata l2AccountProof,
+    bytes32 l2WorldStateRoot
+) public {
+    // ChainConfiguration memory chainConfiguration = chainConfigurations[chainId];
+    BlockProof memory existingBlockProof = provenStates[chainId];
+    require(existingBlockProof.stateRoot == l2WorldStateRoot, "destination chain state root not yet proved");
+
+    bytes32 intentHash = keccak256(abi.encode(inboxContract, intermediateHash));
+
+    bytes32 messageMappingSlot = keccak256(
+        abi.encode(
+            intentHash,
+            1 // storage position of the intents mapping is the first slot
+        )
+    );
+
+    bytes memory inboxStateRoot = RLPReader.readBytes(RLPReader.readList(rlpEncodedInboxData)[2]);
+
+    require(inboxStateRoot.length <= 32, "contract state root incorrectly encoded"); // ensure lossless casting to bytes32
+
+    // proves that the claimaint address corresponds to the intentHash on the contract
+    proveStorage(
+        abi.encodePacked(messageMappingSlot),
+        bytes.concat(hex"94", bytes20(claimant)),
+        l2StorageProof,
+        bytes32(inboxStateRoot)
+    );
+
+    // proves that the inbox data corresponds to the l2worldstate
+    proveAccount(abi.encodePacked(inboxContract), rlpEncodedInboxData, l2AccountProof, l2WorldStateRoot);
+
+    provenIntents[intentHash] = claimant;
+    emit IntentProven(intentHash, claimant);
+}
+```
+
+Once the intent is proven, the solver can proceed to the `IntentSource` contract to withdraw the rewards. For more information about this step, please see the [Reward Withdrawal](/routes/routes-architecture/intent-source-contract#reward-withdrawal) section.
+
+### Proven States
+
+The contract stores the latest state root for all chains in a mapping called `provenStates`. This mapping allows the proven state of any destination chain to be accessed for intent proofs.
+
+```solidity
+// Store the last BlockProof for each ChainId
+mapping(uint256 => BlockProof) public provenStates;
+```
+
+## Design Discussion
+
+### Proof Service
+
+An immediate observation of the above proof flow is that proving a single intent requires a ton of transactions. Why not just batch all these proofs into a single transaction?
+
+The reason is that the storage proofs to prove the destination chain roots are extremely computationally expensive and require massive amounts of calldata. Therefore, it is advantageous to prove a root periodically to allow multiple intents to be proven with a single destination and settlement chain proof. For this reason, Eco Inc. intends to run a [Prover Service](/routes/developer-infrastructure-tooling/prover-service) that periodically submits the settlement proofs and destination proofs on a regular cadence (every 2 hours or so).
+
+See the [Future Directions](/routes/routes-architecture/native-route-prover-contract#future-directions) section for more discussions about the benefits of this architecture.
+
+### Chain Configuration
+
+Chain configurations are managed in the contract via the `ChainConfiguration` structure and `chainConfigurations` mapping. As of now, these are configured during the deployment of the contract in the constructor.
+
+```solidity
+struct ChainConfiguration {
+    uint8 provingMechanism;
+    uint256 settlementChainId;
+    address settlementContract;
+    address blockhashOracle;
+    uint256 outputRootVersionNumber;
+}
+
+struct ChainConfigurationConstructor {
+    uint256 chainId;
+    ChainConfiguration chainConfiguration;
+}
+
+// map the chain id to chain configuration
+mapping(uint256 => ChainConfiguration) public chainConfigurations;
+```
+
+In the future, this system will be optimized to create a relational mapping that defines the chain's settlement layer with respect to other chains. This will allows for proofs between all the different chains, regardless of direction.
+
+The system already enables proofs from L2s to L2s, but the addition of a more robust relational mapping with allow for transfers between any rollups at any layer, regardless of which settlement layer the rollups use (a Base L3 could transfer to an Ethereum L2, etc).
+
+### Prover Modularity
+
+The ability for intent creators to specify which proof contracts they want to use at the time of intent origination ([Intent Parameters](/routes/routes-architecture/intent-source-contract#intent-parameters)) makes the system extremely modular. While this is the root system that will be supported at launch, the system can be easily extended to support much cheaper proof systems. Please see [Future Directions](/routes/routes-architecture/native-route-prover-contract#future-directions) for more details.
+
+### Posted vs. Finalized
+
+Optimistic rollups employ a fraud proof system to ensure sequencers are posting honest roots to the settlement chain. These fraud proof systems first start with the **posting** of a root, and then after a time period, are considered **finalized** if no fraud is proven onchain. As a result, the system can be configured to allow solvers to use both **posted** and **finalized** roots.
+
+For solvers, relying on **posted** roots allows them to quickly claim rewards on the origin chain after solving intents on the destination chain. However, this assumes that the roots posted by sequencers are de facto honest, which does introduce a mild trust assumption.
+
+Relying on **finalized** roots adds zero new trust assumptions to the claiming process, as intents rewards become withdrawable only after roots have successfully been finalized on the settlement chain. The downside of this approach is that solvers must wait 3-7 days for these roots to finalize, during which their capital remains locked up.
+
+In a Beta launch of the protocol, provers will be deployed to support both **posted** and **finalized** roots. However, during this Alpha launch, storage proofs for Bedrock and Cannon carry different trust assumptions. Namely, Bedrock proofs allow for **posted** roots to be used to intent proofs, while Cannon requires **finalized proofs**.
+
+### Future Directions
+
+Future versions of the Eco Protocol will introduce significant prover flexibility and should drive down the proving costs. The different prover options will give intent creators the option to use cheaper routes, at a sacrifice to decentralization.
+
+* [Batch Proofs for Native Route](/routes/future-directions/batch-proofs-for-native-route) — Optimizations to the storage layout on the inbox contract could allow the addition of a `batchProve` function that would allow for many different intents to be proven at once with only a minute increase in calldata costs.
+
+* [ZK-Assisted Storage Proofs](/routes/future-directions/zk-assisted-storage-proofs) — ZK Assisted Storage proofs (enabled by projects like Axiom and RISC-Zero) allow for an arbitrarily large number of storage slots to be proven in a single transaction. The addition of this functionality would allow a single protocol participant to run intent proofs on as part of the [Prover Service](/routes/developer-infrastructure-tooling/prover-service), reducing the cost of these proofs to almost zero. For more information about these systems, please see this [comprehensive article.](https://mirror.xyz/0xsuperscrypt.eth/-H1mV7irQ79Sy2KqtGQ050vUh8ENayRNjTx0YWbfRf4)

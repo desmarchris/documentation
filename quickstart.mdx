@@ -1,9 +1,8 @@
 ---
-title: Eco Routes SDK Quickstart Test
+title: Eco Routes SDK Quickstart
 description: Learn how to integrate the Eco Routes SDK to enable cross-chain stablecoin transfers.
+icon: 'rocket'
 ---
-
-# 🚀 Eco Routes SDK Quickstart
 
 This guide will help you integrate the **Eco Routes SDK** to enable **one-click stablecoin transfers** across chains.
 
@@ -14,24 +13,22 @@ Install the SDK along with its peer dependencies:
 ```bash
 npm install @eco-foundation/routes-sdk @eco-foundation/routes-ts
 ```
-:::callout
+
 💡 Keep dependencies updated
 Run the following command to ensure you’re using the latest versions:
-
+```bash
 npm install @eco-foundation/routes-sdk@latest @eco-foundation/routes-ts@latest
-
-:::
-
-1️⃣ Creating a Transfer Intent
+```
+## Creating a Transfer Intent
 
 An intent represents the desired transfer outcome on a destination chain.
 
-🔹 Import RoutesService
-```
+### Import RoutesService
+```javascript
 import { RoutesService } from '@eco-foundation/routes-sdk';
 ```
-🔹 Define Transfer Parameters
-```
+### Define Transfer Parameters
+```javascript
 const address = '0xYourEthereumAddress';
 const originChainID = 10;  // Optimism
 const destinationChainID = 8453;  // Base
@@ -40,8 +37,8 @@ const receivingToken = RoutesService.getStableAddress(destinationChainID, 'USDC'
 const spendingTokenLimit = BigInt(10000000);  // 10 USDC
 const amount = BigInt(1000000);  // 1 USDC
 ```
-🔹 Initialize RoutesService and Create Intent
-```
+### Initialize RoutesService and Create Intent
+```javascript
 const routesService = new RoutesService();
 
 const intent = routesService.createSimpleIntent({
@@ -55,13 +52,10 @@ const intent = routesService.createSimpleIntent({
   recipient: address,  // Optional, defaults to the creator
 });
 ```
-2️⃣ Request and Apply a Quote
+Request and Apply a Quote
 
 To optimize fulfillment, request quotes from solvers.
-
-:::tabs
-@tab JavaScript
-
+```javascript
 import { OpenQuotingClient, selectCheapestQuote } from '@eco-foundation/routes-sdk';
 
 const openQuotingClient = new OpenQuotingClient({ dAppID: 'your-dapp-id' });
@@ -73,15 +67,14 @@ if (!quotes.length) {
 
 const selectedQuote = selectCheapestQuote(quotes);
 const intentWithQuote = routesService.applyQuoteToIntent({ intent, quote: selectedQuote });
+```
 
-:::
-
-3️⃣ Publishing the Intent
+Publishing the Intent
 
 Once the intent is prepared, publish it to the origin chain using your preferred web3 library.
 
 // Example using ethers.js
-```
+```javascript
 import { ethers } from 'ethers';
 
 const provider = new ethers.JsonRpcProvider("https://your-rpc-url");
@@ -102,8 +95,3 @@ console.log("Intent published:", tx.hash);
 🔄 Stay updated – Keep dependencies updated to ensure compatibility with the latest Eco Protocol changes.
 
 👨‍💻 Get support – Join the Eco developer community for help and discussions.
-
-:::callout
-✨ Now you’re ready to send stablecoins across chains with a single click! 🚀
-:::
-

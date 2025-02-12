@@ -1,0 +1,174 @@
+---
+title: "Intent Source Contract"
+description: "An overview of the IntentSource contract responsible for managing intent origination, custody of funds, and solver fulfillment."
+---
+
+<Info>
+  Each origin chain supported by the Eco Protocol has one `IntentSource` contract.
+</Info>
+
+## Intent Contract Design
+
+The `IntentSource` contract contains two primary functions: `createIntent` and `withdrawRewards`, which are explained below. All code snippets in this section reference [this specific commit](https://github.com/the-eco-foundation/eco-routes/tree/092efe3aaa6fa36c216c57418bcbd4f2540ee1b3).
+
+### Intent Creation
+
+Intent creation is managed through the `createIntent` function on the `IntentSource` contract. When a user goes to post a transfer request on chain, they call this function and supply data specifying the:
+
+* Destination Chain
+
+* Inbox Contract Address
+
+* Array of Contracts to Call
+
+* Array of Calldata for those Functions
+
+* Reward Tokens and Amounts
+
+* Expiration Time
+
+* Prover Contract
+
+```solidity
+function createIntent(
+    uint256 _destinationChainID,
+    address _inbox,
+    address[] calldata _targets,
+    bytes[] calldata _data,
+    address[] calldata _rewardTokens,
+    uint256[] calldata _rewardAmounts,
+    uint256 _expiryTime,
+    address _prover
+) external {
+    uint256 len = _targets.length;
+    if (len == 0 || len != _data.length) {
+        revert CalldataMismatch();
+    }
+
+    len = _rewardTokens.length;
+    if (len == 0 || len != _rewardAmounts.length) {
+        revert RewardsMismatch();
+    }
+
+    if (_expiryTime < block.timestamp + MINIMUM_DURATION) {
+        revert ExpiryTooSoon();
+    }
+```
+
+The contract takes the inputs and calculates a unique hash for the intent request. The addition of a nonce ensures no collisions occur for intent creations with identical parameters. The hash is used by both the `Inbox` and `Prover` contracts to uniquely identify the intent throughout the fulfillment process.
+
+```solidity
+    bytes32 _nonce = keccak256(abi.encode(counter, CHAIN_ID));
+    bytes32 intermediateHash =
+        keccak256(abi.encode(CHAIN_ID, _destinationChainID, _targets, _data, _expiryTime, _nonce));
+    bytes32 intentHash = keccak256(abi.encode(_inbox, intermediateHash));
+    
+    intents[intentHash] = Intent({
+        creator: msg.sender,
+        destinationChainID: _destinationChainID,
+        targets: _targets,
+        data: _data,
+        rewardTokens: _rewardTokens,
+        rewardAmounts: _rewardAmounts,
+        expiryTime: _expiryTime,
+        hasBeenWithdrawn: false,
+        nonce: _nonce,
+        prover: _prover
+    });
+```
+
+Finally, the contract transfers the specified reward tokens to itself and emits an intent creation event.
+
+```solidity
+    counter += 1;
+    
+    for (uint256 i = 0; i < len; i++) {
+        IERC20(_rewardTokens[i]).transferFrom(msg.sender, address(this), _rewardAmounts[i]);
+    }
+    
+    emitIntentCreated(intentHash, intents[intentHash]);
+```
+
+### Reward Withdrawal
+
+Intent creation is managed through the `withdrawRewards` function on the `IntentSource` contract. This function is called by users who are withdrawing unsolved intents, and solvers who have solved intents and are going to claim their rewards.
+
+The intent rewards being claimed are identified by their hash, created during the [origination of the intent](/routes/routes-architecture/intent-source-contract#intent-creation). The contract then checks to ensure that the `Prover` contract shows that intent as proved, and loads the `claimant` address from the prover contract. The `claimant` is the address entitled to claim the funds.
+
+```solidity
+function withdrawRewards(bytes32 _hash) external {
+    Intent storage intent = intents[_hash];
+    address claimant = SimpleProver(intent.prover).provenIntents(_hash);
+    address withdrawTo;
+```
+
+If the intent has been proven by the `Prover` contract, the funds are withdrawn to the `claimant`. If not, then then the contract checks if the intent is past the expiry time, and withdraws the funds to the intent creator.
+
+```solidity
+    if (!intent.hasBeenWithdrawn) {
+        if (claimant != address(0)) {
+            withdrawTo = claimant;
+        } else {
+            if (block.timestamp > intent.expiryTime) {
+                withdrawTo = intent.creator;
+            } else {
+                revert UnauthorizedWithdrawal(_hash);
+            }
+        }
+        intent.hasBeenWithdrawn = true;
+        uint256 len = intent.rewardTokens.length;
+        for (uint256 i = 0; i < len; i++) {
+            IERC20(intent.rewardTokens[i]).transfer(withdrawTo, intent.rewardAmounts[i]);
+        }
+        emit Withdrawal(_hash, withdrawTo);
+    } else {
+        revert NothingToWithdraw(_hash);
+    }
+ }   
+```
+
+## Design Discussion
+
+### Intent Parameters
+
+The `createIntent` function requires the intent creator to specify many parameters as part of intent creation.
+
+* **Destination Chain** — This specifies the ID of the destination chain where the intent fulfillment will be fulfilled on the `Inbox` contract.
+
+* **Inbox Contract Address** — This specifies the address of the `Inbox` contract on the destination chain.
+
+* **Array of Contracts to Call** — This specifies the list of contracts that the intent creator is requesting a solver to call on the destination chain.
+
+* **Array of Calldata for those Functions** — This specifies the list of corresponding function signatures and calldata that pair with the contracts to call.
+
+* **Reward Tokens and Amounts** — This specifies the ERC20 tokens and amounts that the solver is entitled to for fulfilling the intent.
+
+* **Expiration Time** — This specifies the expiration blocktime after which the intent will be considered expired. If the intent fulfillment is not proven by this time, the intent originator can claw back their funds. This expiration time must be appropriately set to the proving method chosen by the intent creator.
+
+* **Prover Contract** — This specifies the proving contract that will validate if the intent has been fulfilled.
+
+The amount of parameterization is part of the design philosophy of the system. It makes the contracts extremely extensible and gives maximum flexibility to intent creators and solvers to specify whatever logic they want to use. It also allows them make their own decisions about tradeoffs between decentralization and cost.
+
+For example, the ability to specify the prover at intent creation makes it easy to use alternative proof methods that might be cheaper for intent creators and solvers.
+
+The choice for maximum flexibility, however, does come with a tradeoff. Given that intent creators can specify whatever function calls and whatever contracts they want, solvers must carefully simulate and vet each intent to ensure they are not malicious.
+
+### User and Solver Matching
+
+At this time, the Eco Protocol does not rely on an RFQ system or offchain matching system before intent creation. At the Beta release, the Eco Protocol is optimized for application developers that intend to run, or will contract out, the settlement of intents on behalf of their customers.
+
+An **Open Quoting System** to match solvers and users will be launched shortly after the Beta Release. Until then, Applications and users will negotiate what fees are appropriate for cross-chain actions on the application level, and applications (or their contracted solvers) will be incentivized to fulfill these intents to retain their customers. In the case where an application fails to fulfill an intent a user posts onchain, the user will experience a lockup of their funds for a given period, but does not risk total loss of their funds as they can reclaim them after the lockup period.
+
+### Future Directions
+
+Future versions of the Eco Protocol will introduce significant flexibility around the solver and user matching process. The system is highly optimized for applications who provide services to their users, but significant improvements are needed to make it appropriate for other decentralized use cases. Below are some possible future improvements relevant to the `IntentSource` contract, which are also discussed in more detail in [Future Directions](/routes/future-directions).
+
+* [Solver Reputation System](/routes/future-directions/solver-reputation-system) — this involves extending the inbox contract to support a solver reputation system. This will provide a strong incentive for solvers that provide quotes to users to credibly fulfill them in time by noting onchain when a solver has made a promise to fulfill an intent. By indexing these promises, a fulfillment score can be calculated for each solver, which will inform whether users should trust these solvers fulfillment promises.
+
+* [Offchain Origination Data](/routes/future-directions/off-chain-origination-data) — the inbox contract would be modified to allow for the relevant calldata associated with transfer requests to be located offchain. The user would only submit the intent hash and collateral, and solvers would look offchain to source the specifics of the request. This would save an immense amount of calldata in the system.
+
+* [Bonded Exclusivity](/routes/future-directions/bonded-exclusivity) — this would involve adding a feature to the `IntentSource` contract that would allow solvers to submit user intents, with the exclusive right to solve them. In order to make exclusive claim to these intents, they would be required to post collateral.
+
+* [ERC-7683 Compliance](/routes/future-directions/erc-7683-compliance) — compliance with ERC-7683 will open the protocol to many different solver pools and increase the compatibility of the system with general purpose intent protocols.
+
+* [TEE Matching Mechanism](../future-directions/tee-matching-mechanism "mention") — the use of TEE systems, and other offchain trustless execution environments, could allow for trustless matching of users and solvers. This might also allow for deterministic execution of actions on both rollups, removing the need for any cross chain proving at all.

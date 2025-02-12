@@ -1,0 +1,7 @@
+---
+title: "Gasless Initiations"
+---
+
+A core requirement for an seamless user experience of Routes is the ability for users to request transfers using gasless initiation. This is necessary for compliance with EIP-7683 and for enabling one click user experiences, like those seen in 1inch Fusion today.
+
+The Routes system will be extended to support gasless initiations for tokens that implement the `Permit` standard, as well as initiations using `Permit2` for tokens that support it (after the initial approval). Both of these will enable a one-click user signature experience that eliminates the need for any native gas on the origin chain.
