@@ -1,34 +1,28 @@
 ---
-title: 'Quickstart'
-description: 'Start building awesome documentation in under 5 minutes'
+title: Eco Routes SDK Quickstart
+description: Learn how to integrate the Eco Routes SDK to enable cross-chain stablecoin transfers.
 ---
 
-# 🚀 Eco Routes SDK Quickstart  
+# 🚀 Eco Routes SDK Quickstart
 
-This guide will help you integrate the **Eco Routes SDK** to enable cross-chain stablecoin transfers.  
+This guide will help you integrate the **Eco Routes SDK** to enable **one-click stablecoin transfers** across chains.
 
-✅ **Install the SDK**  
-✅ **Create a transfer intent**  
-✅ **Request and apply a quote**  
-✅ **Publish the intent**  
+## 🛠️ Installation
 
----
+Install the SDK along with its peer dependencies:
 
-## 1️⃣ Install the SDK  
-
-To get started, install the **Eco Routes SDK** and its peer dependency:  
-
-```bash install-sdk.sh
+```bash
 npm install @eco-foundation/routes-sdk @eco-foundation/routes-ts
 
-🔄 Keep Dependencies Updated
+:::callout
+💡 Keep dependencies updated
+Run the following command to ensure you’re using the latest versions:
 
-Ensure you’re using the latest version of the SDK to stay compatible with the latest contract updates:
+npm install @eco-foundation/routes-sdk@latest @eco-foundation/routes-ts@latest
 
-npm install @eco-foundation/routes-ts@latest
-npm install @eco-foundation/routes-sdk@latest
+:::
 
-2️⃣ Create a Transfer Intent
+1️⃣ Creating a Transfer Intent
 
 An intent represents the desired transfer outcome on a destination chain.
 
@@ -61,33 +55,28 @@ const intent = routesService.createSimpleIntent({
   recipient: address,  // Optional, defaults to the creator
 });
 
-3️⃣ Request and Apply a Quote
+2️⃣ Request and Apply a Quote
 
 To optimize fulfillment, request quotes from solvers.
 
-🔹 Import Quoting Utilities
+:::tabs
+@tab JavaScript
 
 import { OpenQuotingClient, selectCheapestQuote } from '@eco-foundation/routes-sdk';
 
-🔹 Initialize Quoting Client
-
 const openQuotingClient = new OpenQuotingClient({ dAppID: 'your-dapp-id' });
-
-🔹 Fetch Available Quotes
 
 const quotes = await openQuotingClient.requestQuotesForIntent(intent);
 if (!quotes.length) {
   throw new Error('No quotes available');
 }
 
-🔹 Select the Best Quote and Apply It
-
 const selectedQuote = selectCheapestQuote(quotes);
 const intentWithQuote = routesService.applyQuoteToIntent({ intent, quote: selectedQuote });
 
-📌 You can implement custom logic for selecting a quote based on your criteria.
+:::
 
-4️⃣ Publish the Intent
+3️⃣ Publishing the Intent
 
 Once the intent is prepared, publish it to the origin chain using your preferred web3 library.
 
@@ -107,20 +96,22 @@ console.log("Intent published:", tx.hash);
 
 🎯 Next Steps
 
-🚀 Start integrating – Explore advanced configurations in the Eco Routes SDK documentation.
+✅ Start integrating – Explore advanced configurations in the Eco Routes SDK documentation.
 
 🔄 Stay updated – Keep dependencies updated to ensure compatibility with the latest Eco Protocol changes.
 
 👨‍💻 Get support – Join the Eco developer community for help and discussions.
 
-✅ Now you’re ready to send stablecoins across chains with a single click! 🚀
+:::callout
+✨ Now you’re ready to send stablecoins across chains with a single click! 🚀
+:::
 
 ---
 
-### **Why This Markdown Works Well for VS Code**  
-✅ **Code blocks use file-specific names** (`import-service.js`, `fetch-quotes.js`) for better clarity.  
-✅ **Syntax highlighting** improves readability for **JavaScript, Bash, and Ethereum scripts**.  
-✅ **Bullet points, emojis, and bold text** make the guide **scannable and beginner-friendly**.  
-✅ **External links** direct users to official documentation for deeper exploration.  
+### **Why This Markdown is Optimized for Mintlify**
+✅ **Uses `callout` for key tips**  
+✅ **Uses `tabs` for multi-language code snippets**  
+✅ **Supports `code` blocks with syntax highlighting**  
+✅ **Well-structured for readability and engagement**  
 
-Let me know if you need modifications! 🚀
+This will render beautifully in Mintlify’s docs platform. Let me know if you need any refinements! 🚀
