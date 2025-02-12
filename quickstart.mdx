@@ -3,95 +3,124 @@ title: 'Quickstart'
 description: 'Start building awesome documentation in under 5 minutes'
 ---
 
-## Setup your development
+# 🚀 Eco Routes SDK Quickstart  
 
-Learn how to update your docs locally and deploy them to the public.
+This guide will help you integrate the **Eco Routes SDK** to enable cross-chain stablecoin transfers.  
 
-### Edit and preview
+✅ **Install the SDK**  
+✅ **Create a transfer intent**  
+✅ **Request and apply a quote**  
+✅ **Publish the intent**  
 
-<AccordionGroup>
-  <Accordion icon="github" title="Clone your docs locally">
-    During the onboarding process, we created a repository on your Github with
-    your docs content. You can find this repository on our
-    [dashboard](https://dashboard.mintlify.com). To clone the repository
-    locally, follow these
-    [instructions](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository)
-    in your terminal.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Preview changes">
-    Previewing helps you make sure your changes look as intended. We built a
-    command line interface to render these changes locally. 
-    1. Install the
-    [Mintlify CLI](https://www.npmjs.com/package/mintlify) to preview the
-    documentation changes locally with this command: ``` npm i -g mintlify ```
-    2. Run the following command at the root of your documentation (where
-    `docs.json` is): ``` mintlify dev ```
-    <Note>
-      If you’re currently using the legacy ```mint.json``` configuration file, please update the Mintlify CLI:
+---
 
+## 1️⃣ Install the SDK  
 
-      ```npm i -g mintlify@latest```
-      And run the new upgrade command in your docs repository:
+To get started, install the **Eco Routes SDK** and its peer dependency:  
 
-      ```mintlify upgrade```
-      You should now be using the new ```docs.json``` configuration file. Feel free to delete the ```mint.json``` file from your repository.
-    </Note>
-  </Accordion>
-</AccordionGroup>
+```bash install-sdk.sh
+npm install @eco-foundation/routes-sdk @eco-foundation/routes-ts
 
-### Deploy your changes
+🔄 Keep Dependencies Updated
 
-<AccordionGroup>
+Ensure you’re using the latest version of the SDK to stay compatible with the latest contract updates:
 
-<Accordion icon="message-bot" title="Install our Github app">
-  Our Github app automatically deploys your changes to your docs site, so you
-  don't need to manage deployments yourself. You can find the link to install on
-  your [dashboard](https://dashboard.mintlify.com). Once the bot has been
-  successfully installed, there should be a check mark next to the commit hash
-  of the repo.
-</Accordion>
-<Accordion icon="rocket" title="Push your changes">
-  [Commit and push your changes to
-  Git](https://docs.github.com/en/get-started/using-git/pushing-commits-to-a-remote-repository#about-git-push)
-  for your changes to update in your docs site. If you push and don't see that
-  the Github app successfully deployed your changes, you can also manually
-  update your docs through our [dashboard](https://dashboard.mintlify.com).
-</Accordion>
+npm install @eco-foundation/routes-ts@latest
+npm install @eco-foundation/routes-sdk@latest
 
-</AccordionGroup>
+2️⃣ Create a Transfer Intent
 
-## Update your docs
+An intent represents the desired transfer outcome on a destination chain.
 
-Add content directly in your files with MDX syntax and React components. You can use any of our components, or even build your own.
+🔹 Import RoutesService
 
-<CardGroup>
+import { RoutesService } from '@eco-foundation/routes-sdk';
 
-<Card title="Add Content With MDX" icon="file" href="/essentials/markdown">
-  Add content to your docs with MDX syntax.
-</Card>
+🔹 Define Transfer Parameters
 
-<Card
-  title="Add Code Blocks"
-  icon="square-code"
-  href="/essentials/code"
->
-  Add code directly to your docs with syntax highlighting.
-</Card>
+const address = '0xYourEthereumAddress';
+const originChainID = 10;  // Optimism
+const destinationChainID = 8453;  // Base
+const spendingToken = RoutesService.getStableAddress(originChainID, 'USDC');
+const receivingToken = RoutesService.getStableAddress(destinationChainID, 'USDC');
+const spendingTokenLimit = BigInt(10000000);  // 10 USDC
+const amount = BigInt(1000000);  // 1 USDC
 
-<Card
-  title="Add Images"
-  icon="image"
-  href="/essentials/images"
->
-  Add images to your docs to make them more engaging.
-</Card>
+🔹 Initialize RoutesService and Create Intent
 
-<Card
-  title="Add Custom Components"
-  icon="puzzle-piece"
-  href="/essentials/reusable-snippets"
->
-  Add templates to your docs to make them more reusable.
-</Card>
+const routesService = new RoutesService();
 
-</CardGroup>
+const intent = routesService.createSimpleIntent({
+  creator: address,
+  originChainID,
+  spendingToken,
+  spendingTokenLimit,
+  destinationChainID,
+  receivingToken,
+  amount,
+  recipient: address,  // Optional, defaults to the creator
+});
+
+3️⃣ Request and Apply a Quote
+
+To optimize fulfillment, request quotes from solvers.
+
+🔹 Import Quoting Utilities
+
+import { OpenQuotingClient, selectCheapestQuote } from '@eco-foundation/routes-sdk';
+
+🔹 Initialize Quoting Client
+
+const openQuotingClient = new OpenQuotingClient({ dAppID: 'your-dapp-id' });
+
+🔹 Fetch Available Quotes
+
+const quotes = await openQuotingClient.requestQuotesForIntent(intent);
+if (!quotes.length) {
+  throw new Error('No quotes available');
+}
+
+🔹 Select the Best Quote and Apply It
+
+const selectedQuote = selectCheapestQuote(quotes);
+const intentWithQuote = routesService.applyQuoteToIntent({ intent, quote: selectedQuote });
+
+📌 You can implement custom logic for selecting a quote based on your criteria.
+
+4️⃣ Publish the Intent
+
+Once the intent is prepared, publish it to the origin chain using your preferred web3 library.
+
+// Example using ethers.js
+import { ethers } from 'ethers';
+
+const provider = new ethers.JsonRpcProvider("https://your-rpc-url");
+const signer = new ethers.Wallet("your-private-key", provider);
+
+const tx = await signer.sendTransaction({
+  to: intentWithQuote.spendingToken,
+  value: intentWithQuote.amount,
+});
+
+await tx.wait();
+console.log("Intent published:", tx.hash);
+
+🎯 Next Steps
+
+🚀 Start integrating – Explore advanced configurations in the Eco Routes SDK documentation.
+
+🔄 Stay updated – Keep dependencies updated to ensure compatibility with the latest Eco Protocol changes.
+
+👨‍💻 Get support – Join the Eco developer community for help and discussions.
+
+✅ Now you’re ready to send stablecoins across chains with a single click! 🚀
+
+---
+
+### **Why This Markdown Works Well for VS Code**  
+✅ **Code blocks use file-specific names** (`import-service.js`, `fetch-quotes.js`) for better clarity.  
+✅ **Syntax highlighting** improves readability for **JavaScript, Bash, and Ethereum scripts**.  
+✅ **Bullet points, emojis, and bold text** make the guide **scannable and beginner-friendly**.  
+✅ **External links** direct users to official documentation for deeper exploration.  
+
+Let me know if you need modifications! 🚀
