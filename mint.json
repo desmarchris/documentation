@@ -26,7 +26,7 @@
     {
       "group": "Introduction",
       "pages": [
-        "home",
+        "start-here",
         "introduction/eco-architecture",
         "introduction/conceptual-terms",
         "introduction/roadmap",
@@ -36,61 +36,72 @@
     {
       "group": "Routes",
       "pages": [
-
+        "routes/overview",
+        "routes/quickstart",
+        "routes/chain-support",
         {
-          "group": "Routes Architecture",
+          "group": "Learn",
+          "icon": "lightbulb",
           "pages": [
-            "routes/routes-architecture",
-            "routes/routes-architecture/intent-source-contract",
-            "routes/routes-architecture/inbox-contract",
-            {
-              "group": "Native Route (Prover Contract)",
-              "pages": [
-                "routes/routes-architecture/native-route-prover-contract",
-                "routes/routes-architecture/native-route-prover-contract/storage-proofs"
-              ]
-            },
-            {
-              "group": "Hyperlane Route (HyperProver Contract)",
-              "pages": [
-              "routes/routes-architecture/hyperlane-route-prover-contract"
-              ]
-            }
+          {
+            "group": "Routes Architecture",
+            "pages": [
+              "routes/learn/routes-architecture/routes-architecture",
+              "routes/learn/routes-architecture/intent-source-contract",
+              "routes/learn/routes-architecture/inbox-contract",
+              {
+                "group": "Native Route (Prover Contract)",
+                "pages": [
+                  "routes/learn/routes-architecture/native-route-prover-contract",
+                  "routes/learn/routes-architecture/native-route-prover-contract/storage-proofs"
+                ]
+              },
+              {
+                "group": "Hyperlane Route (HyperProver Contract)",
+                "pages": [
+                "routes/learn/routes-architecture/hyperlane-route-prover-contract"
+                ]
+              }
+            ]
+          },
+          {
+            "group": "Developer Infrastructure",
+            "pages": [
+              "routes/learn/developer-infrastructure-tooling/prover-service",
+              "routes/learn/developer-infrastructure-tooling/filler-service",
+              "routes/learn/developer-infrastructure-tooling/permissionless-deployment"
           ]
-        },
-        {
-          "group": "Developer Infrastructure / Tooling",
-          "pages": [
-            "routes/developer-infrastructure-tooling/prover-service",
-            "routes/developer-infrastructure-tooling/filler-service",
-            "routes/developer-infrastructure-tooling/permissionless-deployment",
-            "routes/developer-infrastructure-tooling/sdk-coming-soon"
+          },
+          {
+            "group": "Future Directions",
+            "pages": [
+              "routes/learn/future-directions/batch-proofs-for-native-route",
+              "routes/learn/future-directions/bonded-exclusivity",
+              "routes/learn/future-directions/delegate-calls-helper-contracts",
+              "routes/learn/future-directions/erc-7683-compliance",
+              "routes/learn/future-directions/gasless-initiations",
+              "routes/learn/future-directions/optimistic-claims",
+              "routes/learn/future-directions/off-chain-origination-data",
+              "routes/learn/future-directions/payable-functions",
+              "routes/learn/future-directions/solver-reputation-system",
+              "routes/learn/future-directions/tee-matching-mechanism",
+              "routes/learn/future-directions/zk-assisted-storage-proofs"
+            ]
+          }
           ]
-        },
-        {
-          "group": "Future Directions",
-          "pages": [
-            "routes/future-directions/batch-proofs-for-native-route",
-            "routes/future-directions/bonded-exclusivity",
-            "routes/future-directions/delegate-calls-helper-contracts",
-            "routes/future-directions/erc-7683-compliance",
-            "routes/future-directions/gasless-initiations",
-            "routes/future-directions/optimistic-claims",
-            "routes/future-directions/off-chain-origination-data",
-            "routes/future-directions/payable-functions",
-            "routes/future-directions/solver-reputation-system",
-            "routes/future-directions/tee-matching-mechanism",
-            "routes/future-directions/zk-assisted-storage-proofs"
-          ]
-        },
-        "external-link-0"
+        }
       ]
     },
     {
-      "group": "Future Systems",
+      "group": "Accounts",
       "pages": [
-        "future-systems/accounts",
-        "future-systems/eco-network"
+        "accounts/overview"
+      ]
+    },
+    {
+      "group": "Crowd Liquidity",
+      "pages": [
+        "crowd-liquidity/overview"
       ]
     },
     {

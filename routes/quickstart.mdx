@@ -1,0 +1,138 @@
+---
+title: Quickstart
+description: Learn how to integrate the Eco Routes SDK to enable cross-chain stablecoin transfers.
+icon: 'rocket'
+---
+
+This guide will help you integrate the **Eco Routes SDK** to enable **one-click stablecoin transfers** across chains.
+
+## Step 1: Installation
+
+Install the SDK along with its peer dependencies:
+
+```bash
+npm install @eco-foundation/routes-sdk @eco-foundation/routes-ts
+```
+
+## Step 2: Creating an Intent
+
+An intent represents the desired transfer outcome on a destination chain.
+
+To create a simple stable send intent, create an instance of the `RoutesService` and call `createSimpleIntent` with the required parameters:
+
+```javascript
+// Import RoutesService
+import { RoutesService } from '@eco-foundation/routes-sdk';
+
+// Define transfer paramaters
+const address = '0x1234567890123456789012345678901234567890'
+const originChainID = 10;
+const spendingToken = RoutesService.getStableAddress(originChainID, 'USDC');
+const spendingTokenBalance = BigInt(10000000); // 10 USDC
+const destinationChainID = 8453;
+const receivingToken = RoutesService.getStableAddress(destinationChainID, 'USDC');
+
+const amount = BigInt(1000000); // 1 USDC
+
+const routesService = new RoutesService();
+
+// Bridge: Create a simple stable transfer between two chains
+const intent = routesService.createSimpleIntent({
+  creator: address,
+  originChainID,
+  spendingToken,
+  spendingTokenBalance,
+  destinationChainID,
+  receivingToken,
+  amount,
+  recipient: address, // optional, defaults to the creator if not passed
+})
+```
+## Step 3: Request and Apply a Quote
+To request quotes for an intent and select the cheapest quote, use the `OpenQuotingClient` and `selectCheapestQuote` functions.
+
+Then, you can apply the quote by calling `applyQuoteToIntent` on the `RoutesService` instance:
+
+```javascript
+import { OpenQuotingClient, selectCheapestQuote } from '@eco-foundation/routes-sdk';
+
+const openQuotingClient = new OpenQuotingClient({ dAppID: 'my-dapp' });
+
+const quotes = await openQuotingClient.requestQuotesForIntent(intent);
+if (!quotes.length) {
+  throw new Error('No quotes available');
+}
+
+// select quote
+const selectedQuote = selectCheapestQuote(quotes);
+
+// apply quote to intent
+const intentWithQuote = routesService.applyQuoteToIntent({ intent, quote: selectedQuote });
+```
+
+<Warning>If you do not request a quote for your intent and you continue with publishing it, you risk 
+the possibility of your intent not being fulfilled by any solvers (because of an insufficient token limit), or 
+losing any surplus amount from your spendingTokenLimit that the solver didn't need to fulfill your intent. This is 
+why requesting a quote is strongly recommended.</Warning>
+
+## Step 4: Publishing the Intent
+
+Once the intent is prepared, publish it to the origin chain using your preferred web3 library. Here's an example 
+leveraging `viem`.
+
+```javascript
+import { createWalletClient, privateKeyToAccount, webSocket, http, erc20Abi } from 'viem';
+import { optimism } from 'viem/chains';
+import { IntentSourceAbi } from '@eco-foundation/routes-ts';
+
+const account = privateKeyToAccount('YOUR PRIVATE KEY HERE')
+const originChain = optimism;
+
+const rpcUrl = 'YOUR RPC URL'
+const originWalletClient = createWalletClient({
+  account,
+  transport: webSocket(rpcUrl) // OR http(rpcUrl)
+})
+const originPublicClient = createPublicClient({
+  chain: originChain,
+  transport: webSocket(rpcUrl) // OR http(rpcUrl)
+})
+
+try {
+  // approve the quoted amount to account for fees
+  await Promise.all(intentWithQuote.reward.tokens.map(async ({ token, amount }) => {
+    const approveTxHash = await originWalletClient.writeContract({
+      abi: erc20Abi,
+      address: token,
+      functionName: 'approve',
+      args: [selectedQuote.intentSourceContract, amount],
+      chain: originChain,
+      account
+    })
+
+    await originPublicClient.waitForTransactionReceipt({ hash: approveTxHash })
+  }))
+
+  const publishTxHash = await originWalletClient.writeContract({
+    abi: IntentSourceAbi,
+    address: selectedQuote.intentSourceContract,
+    functionName: 'publishIntent',
+    args: [intentWithQuote, true],
+    chain: originChain,
+    account
+  })
+
+  await originPublicClient.waitForTransactionReceipt({ hash: publishTxHash })
+}
+catch (error) {
+  console.error('Intent creation failed', error)
+}
+```
+
+Congrats! You just finished your first stablesend using Eco.
+
+## Keeping dependencies updated
+Run the following command to ensure you’re using the latest versions:
+```bash
+npm install @eco-foundation/routes-sdk@latest @eco-foundation/routes-ts@latest
+```
