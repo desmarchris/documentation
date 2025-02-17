@@ -26,11 +26,16 @@
     {
       "group": "Introduction",
       "pages": [
-        "start-here",
-        "introduction/eco-architecture",
-        "introduction/conceptual-terms",
-        "introduction/roadmap",
-        "introduction/beta-disclaimer"
+        "what-is-eco",
+        "introduction/key-concepts"
+      ]
+    },
+    {
+      "group": "Use Cases",
+      "pages": [
+        "use-cases/stablecoin-liquidity",
+        "use-cases/one-click-ux",
+        "use-cases/crowd-liquidity"
       ]
     },
     {
@@ -40,11 +45,11 @@
         "routes/quickstart",
         "routes/chain-support",
         {
-          "group": "Learn",
+          "group": "Deeper Dive",
           "icon": "lightbulb",
           "pages": [
           {
-            "group": "Routes Architecture",
+            "group": "Contracts",
             "pages": [
               "routes/learn/routes-architecture/routes-architecture",
               "routes/learn/routes-architecture/intent-source-contract",
@@ -73,7 +78,7 @@
           ]
           },
           {
-            "group": "Future Directions",
+            "group": "In Development",
             "pages": [
               "routes/learn/future-directions/batch-proofs-for-native-route",
               "routes/learn/future-directions/bonded-exclusivity",

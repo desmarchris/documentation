@@ -6,6 +6,22 @@ icon: 'rocket'
 
 This guide will help you integrate the **Eco Routes SDK** to enable **one-click stablecoin transfers** across chains.
 
+In this quickstart, you will:
+<Steps>
+  <Step title="Install SDK">
+    Install the Eco SDK and peer dependency.
+  </Step>
+  <Step title="Create Transfer Intent">
+    Create a Stable transfer intent to send USDC from Optimism to Base.
+  </Step>
+  <Step title="Request and Apply a Quote">
+    Get quotes for the Eco Network to fulfill your intent.
+  </Step>
+  <Step title="Publish Intent">
+    Publish your intent to chain.
+  </Step>
+</Steps>
+
 ## Step 1: Installation
 
 Install the SDK along with its peer dependencies:
@@ -16,7 +32,8 @@ npm install @eco-foundation/routes-sdk @eco-foundation/routes-ts
 
 ## Step 2: Creating an Intent
 
-An intent represents the desired transfer outcome on a destination chain.
+An intent represents the desired transfer outcome on a destination chain. The below code shows creating an intent that sends 
+USDC from Optimism (Chain ID `10`) to Base (Chain ID `8453`).
 
 To create a simple stable send intent, create an instance of the `RoutesService` and call `createSimpleIntent` with the required parameters:
 
